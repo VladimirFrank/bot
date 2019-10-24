@@ -6,6 +6,6 @@ public interface BlackList {
 
     List<BlackListEntity> get();
 
-    boolean isUserInBlackList(SberUser user);
+    boolean isUserInBlackList(String phone);
 
 }

@@ -16,13 +16,17 @@ public class FileBlackList implements BlackList {
     }
 
     @Override
-    public boolean isUserInBlackList(SberUser user) {
+    public boolean isUserInBlackList(String phone) {
         if (blackListEntities == null || blackListEntities.isEmpty()) {
             return false;
         } else {
-            // TODO Добавить проверку по блэклисту.
-            // TODO Нужно найти, как смаппить юзера на сущность блэклиста.
-            return false;
+            for (BlackListEntity entity : blackListEntities) {
+                if (entity.getTelephone() != null && entity.getTelephone().equals(phone)) {
+                    return true;
+                }
+            }
         }
+
+        return false;
     }
 }

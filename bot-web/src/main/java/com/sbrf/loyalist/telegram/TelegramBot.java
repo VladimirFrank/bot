@@ -1,21 +1,29 @@
 package com.sbrf.loyalist.telegram;
 
+import com.sbrf.loyalist.dao.BlackListDao;
+import com.sbrf.loyalist.entity.BlackList;
+import com.sbrf.loyalist.entity.BlackListEntity;
+import com.sbrf.loyalist.entity.SberChat;
 import com.sbrf.loyalist.analyzer.Analyzer;
 import com.sbrf.loyalist.analyzer.AttachmentAnalyzer;
 import com.sbrf.loyalist.analyzer.MessageTextAnalyzer;
 import com.sbrf.loyalist.entity.SberUser;
+
 import org.telegram.telegrambots.ApiContextInitializer;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.KickChatMember;
 import org.telegram.telegrambots.meta.api.methods.ForwardMessage;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatAdministrators;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.*;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.meta.api.methods.groupadministration.KickChatMember;
 
 import java.util.*;
 
@@ -25,13 +33,20 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private static String botUserName = "@spitchenko_v_bot";
 
+    private BlackListDao blackListDao;
+
+    private List<SberChat> chats = new ArrayList<>();
+
     private Map<Integer, SberUser> sberUsers = new HashMap<>();
 
     private Analyzer textAnalyzer = new MessageTextAnalyzer();
 
     private AttachmentAnalyzer attachmentAnalyzer = new AttachmentAnalyzer("attachments");
 
-    private User botUser;
+    public TelegramBot(BlackListDao blackListDao) {
+        super();
+        this.blackListDao = blackListDao;
+    }
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -46,43 +61,40 @@ public class TelegramBot extends TelegramLongPollingBot {
                 if (message.isUserMessage()) {
                     handlerPrivateMessage(message);
                 } else {
-                    if (!message.getNewChatMembers().isEmpty()) {
-                        for (User newUser : message.getNewChatMembers()) {
-                            if (!isVerifiedUser(newUser)) {
-                                System.out.println("Обнаружен незарегистрированный пользователь. " +
-                                        "Пользователь должен написать личное сообщение боту и зарегистрироваться");
-                                try {
-                                    this.execute(
-                                            new KickChatMember(
-                                                    String.valueOf(message.getChatId()), newUser.getId()
-                                            )
-                                    );
-                                } catch (TelegramApiException e) {
-                                    e.printStackTrace();
-                                }
-                            }
-                        }
-                    } else {
-                        List<String> validationResult = textAnalyzer.analyze(message);
-                        if (!validationResult.isEmpty()) {
-                            String analyseResults = "Сообщение содержит следующие ключевые слова:";
-                            for (String keyWord : validationResult) {
-                                analyseResults += keyWord + ",";
-                            }
-                            System.out.println(analyseResults);
-                            notifyAdmins(message, analyseResults);
-                        }
-
-
-                    }
-                }
-
-                User leftUser = message.getLeftChatMember();
-                if (message.getLeftChatMember() != null) {
-                    System.out.println("Удалён пользователь :" + leftUser);
+                    handleGroupMessage(message);
                 }
             }
         }
+    }
+
+    public List<SberUser> kick() {
+        List<SberUser> kickedUsers = new ArrayList<>();
+
+        BlackList blackList = blackListDao.get();
+        List<BlackListEntity> blackListEntities = blackList.get();
+        for (BlackListEntity blackListEntity : blackListEntities) {
+            SberUser sberUserToBan = null;
+            for (Map.Entry<Integer, SberUser> sberUserEntry : sberUsers.entrySet()) {
+                String phone = sberUserEntry.getValue().getTelephone();
+                if (phone != null && phone.equals(blackListEntity.getTelephone())) {
+                    sberUserToBan = sberUserEntry.getValue();
+                    break;
+                }
+            }
+
+            if (sberUserToBan != null) {
+                for (SberChat chat : chats) {
+                    if (chat.containsUser(sberUserToBan)) {
+                        kickUserFromChat(chat.getChatId(), sberUserToBan.getId());
+                        chat.deleteUserIfInChat(sberUserToBan.getId());
+
+                        kickedUsers.add(sberUserToBan);
+                    }
+                }
+            }
+        }
+
+        return kickedUsers;
     }
 
     private boolean isVerifiedUser(User newUser) {
@@ -97,17 +109,6 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Override
     public String getBotToken() {
         return botToken;
-    }
-
-    public static void main(String[] args) {
-        ApiContextInitializer.init();
-        TelegramBotsApi telegramBotsApi = new TelegramBotsApi();
-        try {
-            telegramBotsApi.registerBot(new TelegramBot());
-            System.out.println("Бот зарегистрирован");
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
     }
 
     private void handlerPrivateMessage(Message message) {
@@ -191,6 +192,81 @@ public class TelegramBot extends TelegramLongPollingBot {
             e.printStackTrace();
         }
         return admins;
+    }
+
+    private void handleGroupMessage(Message message) {
+        Long chatId = message.getChatId();
+        if (!message.getNewChatMembers().isEmpty()) {
+            for (User newUser : message.getNewChatMembers()) {
+                Integer newUserId = newUser.getId();
+                // Если не знаем телефон пользователя, то кикаем его.
+                if (!isVerifiedUser(newUser)) {
+                    System.out.println("Обнаружен незарегистрированный пользователь. " +
+                            "Пользователь должен написать личное сообщение боту и зарегистрироваться");
+                    kickUserFromChat(chatId, newUserId);
+                } else {
+                    SberUser existingUser = sberUsers.get(newUserId);
+                    if (isUserInBlackList(existingUser)) {
+                        System.out.println("Попытка добавить заблокированного пользователя в чат. Пользователь будет исключен");
+                        kickUserFromChat(chatId, newUserId);
+                    } else {
+                        // Если знаем телефон пользователя, то сохраняем его в структуру чата.
+                        System.out.println("Пользователь нам известен, сохраним его в чате");
+                        saveUserInChat(chatId, newUserId);
+                    }
+
+                }
+            }
+        } else {
+            List<String> validationResult = textAnalyzer.analyze(message);
+            if (!validationResult.isEmpty()) {
+                String analyseResults = "Сообщение содержит следующие ключевые слова:";
+                for (String keyWord : validationResult) {
+                    analyseResults += keyWord + ",";
+                }
+                System.out.println(analyseResults);
+                notifyAdmins(message, analyseResults);
+            }
+        }
+    }
+
+    private void saveUserInChat(Long newChatId, Integer newUserId) {
+        SberUser sberUser = sberUsers.get(newUserId);
+        SberChat newChat = new SberChat(newChatId);
+        boolean chatExists = false;
+        for (SberChat chat : chats) {
+            if (chat.equals(newChat)) {
+                chatExists = true;
+
+                if (!chat.containsUser(sberUser)) {
+                    chat.addUser(sberUser);
+                }
+            }
+        }
+
+        if (!chatExists) {
+            chats.add(newChat);
+            newChat.addUser(sberUser);
+        }
+    }
+
+
+
+    private void kickUserFromChat(Long chatId, Integer userId) {
+        try {
+            KickChatMember kickChatMember = new KickChatMember(chatId, userId);
+            kickChatMember.setUntilDate(31);
+            this.execute(kickChatMember);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private boolean isUserInBlackList(SberUser user) {
+        BlackList blackList = blackListDao.get();
+        String telephone = user.getTelephone();
+
+        return blackList.isUserInBlackList(telephone);
     }
 
 }
