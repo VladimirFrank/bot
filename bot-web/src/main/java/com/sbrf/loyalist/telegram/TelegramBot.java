@@ -1,13 +1,8 @@
 package com.sbrf.loyalist.telegram;
 
-import com.sbrf.loyalist.dao.BlackListDao;
-import com.sbrf.loyalist.entity.BlackList;
-import com.sbrf.loyalist.entity.BlackListEntity;
-import com.sbrf.loyalist.entity.SberChat;
-import com.sbrf.loyalist.analyzer.Analyzer;
-import com.sbrf.loyalist.analyzer.AttachmentAnalyzer;
-import com.sbrf.loyalist.analyzer.MessageTextAnalyzer;
-import com.sbrf.loyalist.entity.SberUser;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
 
 import org.telegram.telegrambots.ApiContextInitializer;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -25,7 +20,14 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.Keyboard
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.util.*;
+import com.sbrf.loyalist.analyzer.Analyzer;
+import com.sbrf.loyalist.analyzer.AttachmentAnalyzer;
+import com.sbrf.loyalist.analyzer.MessageTextAnalyzer;
+import com.sbrf.loyalist.dao.BlackListDao;
+import com.sbrf.loyalist.entity.BlackList;
+import com.sbrf.loyalist.entity.BlackListEntity;
+import com.sbrf.loyalist.entity.SberChat;
+import com.sbrf.loyalist.entity.SberUser;
 
 public class TelegramBot extends TelegramLongPollingBot {
 
@@ -41,11 +43,14 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private Analyzer textAnalyzer = new MessageTextAnalyzer();
 
-    private AttachmentAnalyzer attachmentAnalyzer = new AttachmentAnalyzer("attachments");
+    private AttachmentAnalyzer attachmentAnalyzer;
 
     public TelegramBot(BlackListDao blackListDao) {
         super();
         this.blackListDao = blackListDao;
+        String userHomePath = System.getProperty("user.home");
+        Path attachmentsPath = Paths.get(userHomePath, "attachments");
+        this.attachmentAnalyzer = new AttachmentAnalyzer(attachmentsPath, this);
     }
 
     @Override
@@ -69,7 +74,6 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     public List<SberUser> kick() {
         List<SberUser> kickedUsers = new ArrayList<>();
-
         BlackList blackList = blackListDao.get();
         List<BlackListEntity> blackListEntities = blackList.get();
         for (BlackListEntity blackListEntity : blackListEntities) {
@@ -87,7 +91,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                     if (chat.containsUser(sberUserToBan)) {
                         kickUserFromChat(chat.getChatId(), sberUserToBan.getId());
                         chat.deleteUserIfInChat(sberUserToBan.getId());
-
                         kickedUsers.add(sberUserToBan);
                     }
                 }
@@ -227,6 +230,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 System.out.println(analyseResults);
                 notifyAdmins(message, analyseResults);
             }
+            attachmentAnalyzer.analyze(message);
         }
     }
 
@@ -267,6 +271,17 @@ public class TelegramBot extends TelegramLongPollingBot {
         String telephone = user.getTelephone();
 
         return blackList.isUserInBlackList(telephone);
+    }
+
+    public static void main(String[] args) {
+        ApiContextInitializer.init();
+        TelegramBotsApi telegramBotsApi = new TelegramBotsApi();
+        try {
+            telegramBotsApi.registerBot(new TelegramBot(null));
+            System.out.println("Бот зарегистрирован");
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
     }
 
 }

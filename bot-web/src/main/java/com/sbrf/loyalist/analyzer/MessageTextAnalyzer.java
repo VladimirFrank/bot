@@ -1,15 +1,10 @@
 package com.sbrf.loyalist.analyzer;
 
-import com.sbrf.loyalist.entity.SberUser;
-import com.sbrf.loyalist.telegram.TelegramBot;
-import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.Message;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import org.telegram.telegrambots.meta.api.objects.Message;
 
 public class MessageTextAnalyzer implements Analyzer {
 
@@ -20,7 +15,8 @@ public class MessageTextAnalyzer implements Analyzer {
                     "скриншот",
                     "экран",
                     "монитор",
-                    "телефон"
+                    "телефон",
+                    "клиент"
             );
 
     private static final String POTENTIAL_CONFIDENTIAL_CRIME = "Потенциальное нарушение правил " +
