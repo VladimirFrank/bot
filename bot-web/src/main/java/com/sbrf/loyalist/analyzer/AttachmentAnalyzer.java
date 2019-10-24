@@ -29,21 +29,21 @@ public class AttachmentAnalyzer implements Analyzer {
     public void analyze(Message message) {
         // TODO Получить ИД и Имя чата
         Long chatId = message.getChat().getId();
-        String chatName = message.getChat().getFirstName();
+        String chatTitle = message.getChat().getTitle();
 
         Voice voice = message.getVoice();
         if (voice != null)
-            saveVoice(chatName, String.valueOf(chatId), voice);
+            saveVoice(chatTitle, String.valueOf(chatId), voice);
 
         Document document = message.getDocument();
         if (document != null)
-            saveDocument(chatName, String.valueOf(chatId), document);
+            saveDocument(chatTitle, String.valueOf(chatId), document);
 
         List<PhotoSize> photos = message.getPhoto();
         if (photos != null && !photos.isEmpty())
-            savePhotos(chatName, String.valueOf(chatId), photos);
+            savePhotos(chatTitle, String.valueOf(chatId), photos);
 
-        createDirForAttachment(chatName, String.valueOf(chatId));
+        createDirForAttachment(chatTitle, String.valueOf(chatId));
     }
 
     @Override
@@ -51,29 +51,29 @@ public class AttachmentAnalyzer implements Analyzer {
 
     }
 
-    private void saveVoice(String chatName, String chatId, Voice voice) {
-        createDirForAttachment(chatName, chatId);
+    private void saveVoice(String chatTitle, String chatId, Voice voice) {
+        createDirForAttachment(chatTitle, chatId);
         //bot.downloadFile()
 
     }
 
-    private void saveDocument(String chatName, String chatId, Document document) {
-        createDirForAttachment(chatName, chatId);
+    private void saveDocument(String chatTitle, String chatId, Document document) {
+        createDirForAttachment(chatTitle, chatId);
 
 
     }
 
-    private void savePhotos(String chatName, String chatId, List<PhotoSize> photoSizes) {
-        createDirForAttachment(chatName, chatId);
+    private void savePhotos(String chatTitle, String chatId, List<PhotoSize> photoSizes) {
+        createDirForAttachment(chatTitle, chatId);
 
 
     }
 
-    private void createDirForAttachment(String chatName, String chatId) {
+    private void createDirForAttachment(String chatTitle, String chatId) {
         Date date = new Date();
         String formattedDate = DATE_FORMAT.format(date);
-        String chatNameWithoutSpaces = chatName.replace(" ", "_");
-        Path path = Paths.get(baseDir, chatNameWithoutSpaces + "#" + chatId, formattedDate);
+        String chatTitleWithoutSpaces = chatTitle.replace(" ", "_");
+        Path path = Paths.get(baseDir, chatTitleWithoutSpaces + "#" + chatId, formattedDate);
         if (!Files.exists(path)) {
             try {
                 Files.createDirectories(path);
