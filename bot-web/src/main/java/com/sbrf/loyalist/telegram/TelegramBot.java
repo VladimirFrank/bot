@@ -128,13 +128,23 @@ public class TelegramBot extends TelegramLongPollingBot {
             SberUser sberUser = sberUsers.get(userId);
             if (sberUser.getTelephone() == null) {
                 sberUser.setTelephone(phoneNumber);
+                SendMessage sendMessage =
+                        new SendMessage(
+                                message.getChatId(),
+                                "Спасибо, регистрация выполнена. Теперь администраторы могут добавить вас в чат"
+                );
+                try {
+                    execute(sendMessage);
+                } catch (TelegramApiException e) {
+                    e.printStackTrace();
+                }
             } else {
                 System.out.println("Вы уже зарегистрированы, действий не требуется: телефон = " + phoneNumber);
             }
         } else if (sberUsers.get(userId).getTelephone() == null) {
             SendMessage sendMessage = new SendMessage()
                     .setChatId(message.getChatId())
-                    .setText("Требуется предоставить ваш номер телефона");
+                    .setText("Для регистрации необходимо предоставить ваш номер телефона");
 
             // create keyboard
             ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
@@ -149,7 +159,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             // first keyboard line
             KeyboardRow keyboardFirstRow = new KeyboardRow();
             KeyboardButton keyboardButton = new KeyboardButton();
-            keyboardButton.setText("Отправить номер телефона").setRequestContact(true);
+            keyboardButton.setText("Зарегистрироваться").setRequestContact(true);
             keyboardFirstRow.add(keyboardButton);
 
             // add array to list
@@ -236,7 +246,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void sendHelloMessageToNewUser(Integer newUserId) {
         try {
-            SendMessage sendMessage = new SendMessage(String.valueOf(newUserId), "Я с вами не знаком, пришлите мне сообщение.");
+            SendMessage sendMessage = new SendMessage(String.valueOf(newUserId), "Добрый день, коллега. Для начала регистрации пришлите, пожалуйста, любое сообщение");
             execute(sendMessage);
         } catch (TelegramApiException e) {
             e.printStackTrace();

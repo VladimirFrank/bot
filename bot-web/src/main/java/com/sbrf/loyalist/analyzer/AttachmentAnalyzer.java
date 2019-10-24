@@ -22,7 +22,7 @@ import com.sbrf.loyalist.telegram.TelegramBot;
 public class AttachmentAnalyzer {
 
     private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
-    private static final DateFormat DATE_TIME_FORMAT = new SimpleDateFormat("yyyy-MM-dd-hh:mm:ss");
+    private static final DateFormat DATE_TIME_FORMAT = new SimpleDateFormat("yyyy-MM-dd-hh-mm-ss");
 
     private Path baseDir;
 
@@ -79,7 +79,7 @@ public class AttachmentAnalyzer {
         String file_path = path.getString("file_path");
         URL download = new URL("https://api.telegram.org/file/bot" + telegramBot.getBotToken() + "/" + file_path);
 
-        FileOutputStream fos = new FileOutputStream(String.valueOf(Paths.get(String.valueOf(upPath), file_name)));
+        FileOutputStream fos = new FileOutputStream(upPath.resolve(file_name).toString());
         System.out.println("Start upload");
         ReadableByteChannel rbc = Channels.newChannel(download.openStream());
         fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
