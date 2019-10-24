@@ -37,9 +37,9 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private BlackListDao blackListDao;
 
-    private List<SberChat> chats = new ArrayList<>();
+    private static final List<SberChat> chats = new ArrayList<>();
 
-    private Map<Integer, SberUser> sberUsers = new HashMap<>();
+    private static final Map<Integer, SberUser> sberUsers = new HashMap<>();
 
     private Analyzer textAnalyzer = new MessageTextAnalyzer();
 
@@ -72,7 +72,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    public List<SberUser> kick() {
+    public synchronized List<SberUser> kick() {
         List<SberUser> kickedUsers = new ArrayList<>();
         BlackList blackList = blackListDao.get();
         List<BlackListEntity> blackListEntities = blackList.get();
@@ -100,7 +100,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         return kickedUsers;
     }
 
-    private boolean isVerifiedUser(User newUser) {
+    private synchronized boolean isVerifiedUser(User newUser) {
         Integer sberUserId = newUser.getId();
         return sberUsers.containsKey(sberUserId) && sberUsers.get(sberUserId).getTelephone() != null;
     }
@@ -114,7 +114,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         return botToken;
     }
 
-    private void handlerPrivateMessage(Message message) {
+    private synchronized void handlerPrivateMessage(Message message) {
         Integer userId = message.getFrom().getId();
         boolean hasContact = message.hasContact();
 
@@ -197,7 +197,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         return admins;
     }
 
-    private void handleGroupMessage(Message message) {
+    private synchronized void handleGroupMessage(Message message) {
         Long chatId = message.getChatId();
         if (!message.getNewChatMembers().isEmpty()) {
             for (User newUser : message.getNewChatMembers()) {
@@ -206,6 +206,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 if (!isVerifiedUser(newUser)) {
                     System.out.println("Обнаружен незарегистрированный пользователь. " +
                             "Пользователь должен написать личное сообщение боту и зарегистрироваться");
+                    sendHelloMessageToNewUser(newUserId);
                     kickUserFromChat(chatId, newUserId);
                 } else {
                     SberUser existingUser = sberUsers.get(newUserId);
@@ -217,7 +218,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                         System.out.println("Пользователь нам известен, сохраним его в чате");
                         saveUserInChat(chatId, newUserId);
                     }
-
                 }
             }
         } else {
@@ -234,7 +234,16 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void saveUserInChat(Long newChatId, Integer newUserId) {
+    private void sendHelloMessageToNewUser(Integer newUserId) {
+        try {
+            SendMessage sendMessage = new SendMessage(String.valueOf(newUserId), "Я с вами не знаком, пришлите мне сообщение.");
+            execute(sendMessage);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private synchronized void saveUserInChat(Long newChatId, Integer newUserId) {
         SberUser sberUser = sberUsers.get(newUserId);
         SberChat newChat = new SberChat(newChatId);
         boolean chatExists = false;
@@ -256,7 +265,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
 
 
-    private void kickUserFromChat(Long chatId, Integer userId) {
+    private synchronized void kickUserFromChat(Long chatId, Integer userId) {
         try {
             KickChatMember kickChatMember = new KickChatMember(chatId, userId);
             kickChatMember.setUntilDate(31);
@@ -266,7 +275,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private boolean isUserInBlackList(SberUser user) {
+    private synchronized boolean isUserInBlackList(SberUser user) {
         BlackList blackList = blackListDao.get();
         String telephone = user.getTelephone();
 
