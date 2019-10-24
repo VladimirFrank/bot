@@ -46,6 +46,24 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-webmvc</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.telegram</groupId>
+            <artifactId>telegrambots</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.telegram-s</groupId>
+            <artifactId>tl-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.telegram-s</groupId>
+            <artifactId>tl-core</artifactId>
+            <version>1.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.telegram</groupId>
+            <artifactId>telegramapi</artifactId>
+            <version>66.2</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -54,6 +54,19 @@
                 <artifactId>spring-webmvc</artifactId>
                 <version>${spring.version}</version>
             </dependency>
+            <!-- https://mvnrepository.com/artifact/org.telegram/telegrambots -->
+            <dependency>
+                <groupId>org.telegram</groupId>
+                <artifactId>telegrambots</artifactId>
+                <version>4.4.0</version>
+            </dependency>
+            <!-- https://mvnrepository.com/artifact/org.telegram-s/tl-core -->
+            <dependency>
+                <groupId>org.telegram-s</groupId>
+                <artifactId>tl-core</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
@@ -65,7 +78,7 @@
                         <artifactId>maven-compiler-plugin</artifactId>
                         <version>3.8.0</version>
                         <configuration>
-                            <release>12</release>
+                            <release>8</release>
                         </configuration>
                     </plugin>
                     <plugin>
