@@ -1,25 +1,22 @@
 package com.sbrf.loyalist.telegram;
 
+import com.sbrf.loyalist.analyzer.Analyzer;
+import com.sbrf.loyalist.analyzer.AttachmentAnalyzer;
+import com.sbrf.loyalist.analyzer.MessageTextAnalyzer;
 import com.sbrf.loyalist.entity.SberUser;
-import org.telegram.api.chat.channel.TLChannel;
 import org.telegram.telegrambots.ApiContextInitializer;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
-import org.telegram.telegrambots.meta.api.methods.GetFile;
-import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat;
-import org.telegram.telegrambots.meta.api.methods.send.SendContact;
+import org.telegram.telegrambots.meta.api.methods.ForwardMessage;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatAdministrators;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.Chat;
-import org.telegram.telegrambots.meta.api.objects.Message;
-import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.User;
+import org.telegram.telegrambots.meta.api.objects.*;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.KickChatMember;
 
-import java.lang.reflect.Method;
 import java.util.*;
 
 public class TelegramBot extends TelegramLongPollingBot {
@@ -29,6 +26,12 @@ public class TelegramBot extends TelegramLongPollingBot {
     private static String botUserName = "@spitchenko_v_bot";
 
     private Map<Integer, SberUser> sberUsers = new HashMap<>();
+
+    private Analyzer textAnalyzer = new MessageTextAnalyzer();
+
+    private AttachmentAnalyzer attachmentAnalyzer = new AttachmentAnalyzer("attachments");
+
+    private User botUser;
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -40,7 +43,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             Message message = update.getMessage();
             if (update.hasMessage()) {
                 System.out.println("Получено обновление : " + message.getDate());
-
                 if (message.isUserMessage()) {
                     handlerPrivateMessage(message);
                 } else {
@@ -51,43 +53,34 @@ public class TelegramBot extends TelegramLongPollingBot {
                                         "Пользователь должен написать личное сообщение боту и зарегистрироваться");
                                 try {
                                     this.execute(
-                                            new KickChatMember(String.valueOf(message.getChatId()), newUser.getId())
+                                            new KickChatMember(
+                                                    String.valueOf(message.getChatId()), newUser.getId()
+                                            )
                                     );
                                 } catch (TelegramApiException e) {
                                     e.printStackTrace();
                                 }
                             }
                         }
+                    } else {
+                        List<String> validationResult = textAnalyzer.analyze(message);
+                        if (!validationResult.isEmpty()) {
+                            String analyseResults = "Сообщение содержит следующие ключевые слова:";
+                            for (String keyWord : validationResult) {
+                                analyseResults += keyWord + ",";
+                            }
+                            System.out.println(analyseResults);
+                            notifyAdmins(message, analyseResults);
+                        }
+
+
                     }
-
-
-
                 }
 
                 User leftUser = message.getLeftChatMember();
-
                 if (message.getLeftChatMember() != null) {
                     System.out.println("Удалён пользователь :" + leftUser);
                 }
-//                if (message.getText() != null) {
-//                    System.out.println("Текст сообщения :" + message.getText());
-//                    if (message.getText().equals("command")) {
-//                        try {
-//                            Chat chat = this.execute(new GetChat(message.getChatId()));
-//                            SendContact sc = new SendContact();
-//                         } catch (TelegramApiException e) {
-//                            e.printStackTrace();
-//                        }
-//                    }
-//
-//                    if (message.getText().equals("kick")) {
-//                        try {
-//                            this.execute(new KickChatMember(String.valueOf(message.getChatId()), 880820055));
-//                        } catch (TelegramApiException e) {
-//                            e.printStackTrace();
-//                        }
-//                    }
-//                }
             }
         }
     }
@@ -112,13 +105,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         try {
             telegramBotsApi.registerBot(new TelegramBot());
             System.out.println("Бот зарегистрирован");
-
-//            telegramBotsApi.registerBot(new ChannelHandlers());
-//            telegramBotsApi.registerBot(new DirectionsHandlers());
-//            telegramBotsApi.registerBot(new RaeHandlers());
-//            telegramBotsApi.registerBot(new WeatherHandlers());
-//            telegramBotsApi.registerBot(new TransifexHandlers());
-//            telegramBotsApi.registerBot(new FilesHandlers());
         } catch (TelegramApiException e) {
             e.printStackTrace();
         }
@@ -133,7 +119,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             sberUsers.put(userId, sberUser);
         }
 
-        if (hasContact) {
+        if (sberUsers.get(userId).getTelephone() == null && hasContact) {
             String phoneNumber = message.getContact().getPhoneNumber();
             SberUser sberUser = sberUsers.get(userId);
             if (sberUser.getTelephone() == null) {
@@ -141,7 +127,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             } else {
                 System.out.println("Вы уже зарегистрированы, действий не требуется: телефон = " + phoneNumber);
             }
-        } else {
+        } else if (sberUsers.get(userId).getTelephone() == null) {
             SendMessage sendMessage = new SendMessage()
                     .setChatId(message.getChatId())
                     .setText("Требуется предоставить ваш номер телефона");
@@ -174,6 +160,37 @@ public class TelegramBot extends TelegramLongPollingBot {
                 e.printStackTrace();
             }
         }
+    }
+
+    /**
+     * Оповестить администраторов о проблемном сообщении.
+     */
+    public void notifyAdmins(Message message, String analyzeResult) { // Message - это сообщение из чата
+        try {
+            List<Integer> administrators = getChatAdmins(String.valueOf(message.getChat().getId()));
+            for(Integer admin : administrators) {
+                execute(new ForwardMessage(String.valueOf(admin), message.getChatId(), message.getMessageId()));
+                execute(new SendMessage(String.valueOf(admin), analyzeResult));
+            }
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private List<Integer> getChatAdmins(String chatId) {
+        GetChatAdministrators getChatAdministrators = new GetChatAdministrators();
+        getChatAdministrators.setChatId(chatId);
+        List<Integer> admins = new ArrayList<>();
+        try {
+            for(ChatMember chatMember : execute(getChatAdministrators)) {
+                if (!chatMember.getUser().getBot()) {
+                    admins.add(chatMember.getUser().getId());
+                }
+            }
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+        return admins;
     }
 
 }
