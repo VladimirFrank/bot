@@ -51,6 +51,10 @@
             <artifactId>telegrambots</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-all</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.telegram-s</groupId>
             <artifactId>tl-core</artifactId>
         </dependency>
