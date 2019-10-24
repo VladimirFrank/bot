@@ -4,22 +4,27 @@ import com.sbrf.loyalist.dao.BlackListDao;
 import com.sbrf.loyalist.entity.BlackList;
 import com.sbrf.loyalist.entity.BlackListEntity;
 import com.sbrf.loyalist.entity.SberChat;
+import com.sbrf.loyalist.analyzer.Analyzer;
+import com.sbrf.loyalist.analyzer.AttachmentAnalyzer;
+import com.sbrf.loyalist.analyzer.MessageTextAnalyzer;
 import com.sbrf.loyalist.entity.SberUser;
-import org.springframework.context.event.ContextRefreshedEvent;
+
 import org.telegram.telegrambots.ApiContextInitializer;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.KickChatMember;
+import org.telegram.telegrambots.meta.api.methods.ForwardMessage;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatAdministrators;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
+import org.telegram.telegrambots.meta.api.objects.*;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import javax.annotation.PostConstruct;
 import java.util.*;
 
 public class TelegramBot extends TelegramLongPollingBot {
@@ -33,6 +38,10 @@ public class TelegramBot extends TelegramLongPollingBot {
     private static final List<SberChat> chats = new ArrayList<>();
 
     private static final Map<Integer, SberUser> sberUsers = new HashMap<>();
+
+    private Analyzer textAnalyzer = new MessageTextAnalyzer();
+
+    private AttachmentAnalyzer attachmentAnalyzer = new AttachmentAnalyzer("attachments");
 
     public TelegramBot(BlackListDao blackListDao) {
         super();
@@ -49,7 +58,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             Message message = update.getMessage();
             if (update.hasMessage()) {
                 System.out.println("Получено обновление : " + message.getDate());
-
                 if (message.isUserMessage()) {
                     handlerPrivateMessage(message);
                 } else {
@@ -112,7 +120,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             sberUsers.put(userId, sberUser);
         }
 
-        if (hasContact) {
+        if (sberUsers.get(userId).getTelephone() == null && hasContact) {
             String phoneNumber = message.getContact().getPhoneNumber();
             SberUser sberUser = sberUsers.get(userId);
             if (sberUser.getTelephone() == null) {
@@ -120,7 +128,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             } else {
                 System.out.println("Вы уже зарегистрированы, действий не требуется: телефон = " + phoneNumber);
             }
-        } else {
+        } else if (sberUsers.get(userId).getTelephone() == null) {
             SendMessage sendMessage = new SendMessage()
                     .setChatId(message.getChatId())
                     .setText("Требуется предоставить ваш номер телефона");
@@ -155,6 +163,37 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    /**
+     * Оповестить администраторов о проблемном сообщении.
+     */
+    public void notifyAdmins(Message message, String analyzeResult) { // Message - это сообщение из чата
+        try {
+            List<Integer> administrators = getChatAdmins(String.valueOf(message.getChat().getId()));
+            for(Integer admin : administrators) {
+                execute(new ForwardMessage(String.valueOf(admin), message.getChatId(), message.getMessageId()));
+                execute(new SendMessage(String.valueOf(admin), analyzeResult));
+            }
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private List<Integer> getChatAdmins(String chatId) {
+        GetChatAdministrators getChatAdministrators = new GetChatAdministrators();
+        getChatAdministrators.setChatId(chatId);
+        List<Integer> admins = new ArrayList<>();
+        try {
+            for(ChatMember chatMember : execute(getChatAdministrators)) {
+                if (!chatMember.getUser().getBot()) {
+                    admins.add(chatMember.getUser().getId());
+                }
+            }
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+        return admins;
+    }
+
     private synchronized void handleGroupMessage(Message message) {
         Long chatId = message.getChatId();
         if (!message.getNewChatMembers().isEmpty()) {
@@ -177,6 +216,16 @@ public class TelegramBot extends TelegramLongPollingBot {
                         saveUserInChat(chatId, newUserId);
                     }
                 }
+            }
+        } else {
+            List<String> validationResult = textAnalyzer.analyze(message);
+            if (!validationResult.isEmpty()) {
+                String analyseResults = "Сообщение содержит следующие ключевые слова:";
+                for (String keyWord : validationResult) {
+                    analyseResults += keyWord + ",";
+                }
+                System.out.println(analyseResults);
+                notifyAdmins(message, analyseResults);
             }
         }
     }

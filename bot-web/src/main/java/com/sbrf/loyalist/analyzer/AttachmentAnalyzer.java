@@ -13,54 +13,42 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 
-public class AttachmentAnalyzer implements Analyzer {
+public class AttachmentAnalyzer {
 
     private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
 
     private String baseDir;
-    private TelegramLongPollingBot bot;
 
-    public AttachmentAnalyzer(String baseDir, TelegramLongPollingBot bot) {
+    public AttachmentAnalyzer(String baseDir) {
         this.baseDir = baseDir;
-        this.bot = bot;
     }
 
-    @Override
     public void analyze(Message message) {
         // TODO Получить ИД и Имя чата
         Long chatId = message.getChat().getId();
         String chatTitle = message.getChat().getTitle();
 
         Voice voice = message.getVoice();
-        if (voice != null)
+        if (voice != null) {
             saveVoice(chatTitle, String.valueOf(chatId), voice);
-
+        }
         Document document = message.getDocument();
-        if (document != null)
+        if (document != null) {
             saveDocument(chatTitle, String.valueOf(chatId), document);
-
+        }
         List<PhotoSize> photos = message.getPhoto();
-        if (photos != null && !photos.isEmpty())
+        if (photos != null && !photos.isEmpty()) {
             savePhotos(chatTitle, String.valueOf(chatId), photos);
-
+        }
         createDirForAttachment(chatTitle, String.valueOf(chatId));
-    }
-
-    @Override
-    public void notifyAdmins(String message) {
-
     }
 
     private void saveVoice(String chatTitle, String chatId, Voice voice) {
         createDirForAttachment(chatTitle, chatId);
-        //bot.downloadFile()
-
     }
 
     private void saveDocument(String chatTitle, String chatId, Document document) {
         createDirForAttachment(chatTitle, chatId);
-
-
     }
 
     private void savePhotos(String chatTitle, String chatId, List<PhotoSize> photoSizes) {
@@ -91,7 +79,7 @@ public class AttachmentAnalyzer implements Analyzer {
         Message message = Mockito.mock(Message.class);
         Mockito.when(message.getChat()).thenReturn(chat);
 
-        AttachmentAnalyzer attachmentAnalyzer = new AttachmentAnalyzer("C:\\work\\attachments", null);
+        AttachmentAnalyzer attachmentAnalyzer = new AttachmentAnalyzer("C:\\work\\attachments");
         attachmentAnalyzer.analyze(message);
     }
 
